@@ -1,13 +1,6 @@
 import "./style.css";
-import { GoogleGenAI } from "@google/genai";
-
-const AI_STUDIO_URL = "https://aistudio.google.com/app/apikey";
-const ANALYSIS_MODEL = "gemini-2.5-flash";
-const IMAGE_MODEL = "gemini-3.1-flash-image";
-
 const state = {
-  step: 0, apiKey: sessionStorage.getItem("gemini_api_key") || "",
-  remember: false, imageDataUrl: "", imageMime: "", imageBase64: "",
+  step: 0, imageDataUrl: "", imageMime: "", imageBase64: "",
   title: "", description: "", analysis: null, components: [],
   figureType: "전체 사시도", generated: "", generatedMime: "image/png",
   markers: [], selectedMarker: null, drawingDescription: ""
@@ -17,50 +10,28 @@ const app = document.querySelector("#app");
 const steps = ["시작","스케치","구조 분석","구성 확인","도면 생성","부호 편집","완성"];
 
 function esc(s=""){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-function client(){ if(!state.apiKey) throw new Error("API Key를 먼저 입력해주세요."); return new GoogleGenAI({apiKey: state.apiKey}); }
 function dataUrlToBase64(dataUrl){ return dataUrl.split(",")[1] || ""; }
 function downloadDataUrl(url,name){ const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove(); }
 function setStep(n){state.step=n;render();window.scrollTo({top:0,behavior:"smooth"});}
 function stepsHtml(){return `<div class="steps">${steps.map((s,i)=>`<div class="step ${i===state.step?"active":i<state.step?"done":""}">${i+1}. ${s}</div>`).join("")}</div>`}
 
-function apiModal(){
- return `<div class="api-modal" id="apiModal"><div class="modal-card">
- <div class="row between"><div><span class="badge">BYOK</span><h2>Google Gemini API 연결</h2></div><button class="btn secondary" id="closeApi">닫기</button></div>
- <p class="muted">본인의 Gemini API Key를 사용합니다. 앱 운영자용 공용 키는 포함하지 않습니다.</p>
- <div class="notice"><b>① API Key 발급</b><br>Google AI Studio에서 키를 만든 뒤 복사하세요.<br><br>
- <a class="btn google" href="${AI_STUDIO_URL}" target="_blank" rel="noopener noreferrer">🔑 Google AI Studio에서 API Key 발급하기 ↗</a></div>
- <div class="field"><label>② API Key</label><input id="apiInput" type="password" autocomplete="off" placeholder="API Key 붙여넣기" value="${esc(state.apiKey)}"></div>
- <label class="check"><input id="rememberKey" type="checkbox" ${state.remember?"checked":""}><span><b>이 기기에서 기억하기</b><br><span class="small muted">공용 PC에서는 선택하지 마세요.</span></span></label>
- <div class="row" style="margin-top:16px"><button class="btn" id="testApi">연결 확인</button><span id="apiStatus" class="small muted"></span></div>
- <p class="small muted">기본값은 현재 탭의 세션 저장입니다. 브라우저를 닫으면 삭제됩니다. '기억하기'를 선택하면 이 브라우저의 localStorage에 저장됩니다.</p>
- </div></div>`;
-}
-
 function layout(content){
  app.innerHTML=`<div class="shell">
  <div class="topbar"><div class="brand"><h1>Patent Drawing Lab</h1><p>학생 발명 스케치 → 특허도면 작성 도우미 <span class="badge">교육용 초안</span></p></div>
- <button class="btn outline" id="apiBtn">⚙ API 설정 ${state.apiKey?"✓":""}</button></div>
+ <span class="badge">수업용 AI 연결</span></div>
  ${stepsHtml()}${content}</div>`;
- document.querySelector("#apiBtn").onclick=()=>{document.body.insertAdjacentHTML("beforeend",apiModal());bindApi();}
 }
 
-function bindApi(){
- const modal=document.querySelector("#apiModal");
- document.querySelector("#closeApi").onclick=()=>modal.remove();
- document.querySelector("#testApi").onclick=async()=>{
-   const key=document.querySelector("#apiInput").value.trim();
-   const status=document.querySelector("#apiStatus"); status.textContent="확인 중…";
-   try{
-     const ai=new GoogleGenAI({apiKey:key});
-     const r=await ai.models.generateContent({model:ANALYSIS_MODEL,contents:"Reply only with OK."});
-     if(!r.text) throw new Error("응답 없음");
-     state.apiKey=key; state.remember=document.querySelector("#rememberKey").checked;
-     sessionStorage.setItem("gemini_api_key",key);
-     if(state.remember) localStorage.setItem("gemini_api_key",key); else localStorage.removeItem("gemini_api_key");
-     status.textContent="✅ 연결되었습니다.";
-     setTimeout(()=>{modal.remove();render()},600);
-   }catch(e){status.textContent="❌ 연결 실패: "+(e.message||e)}
- };
+async function callApi(path, payload){
+ const response=await fetch(path,{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify(payload)
+ });
+ let data={};
+ try{ data=await response.json(); }catch{}
+ if(!response.ok) throw new Error(data.error||`서버 오류 (${response.status})`);
+ return data;
 }
 
 function home(){
@@ -96,30 +67,20 @@ function upload(){
 async function analyzeSketch(){
  state.title=document.querySelector("#title").value.trim();state.description=document.querySelector("#desc").value.trim();
  if(!state.imageBase64) return alert("스케치 이미지를 먼저 올려주세요.");
- if(!state.apiKey){document.querySelector("#apiBtn").click();return;}
  const btn=document.querySelector("#analyze");btn.disabled=true;btn.textContent="분석 중…";
  try{
-   const ai=client();
-   const prompt=`당신은 고등학교 지식재산교육용 발명 스케치 분석 도우미입니다.
-학생의 발명을 새로 설계하거나 보이지 않는 부품을 상상하지 마세요.
-발명명: ${state.title}
-학생 설명: ${state.description}
-이미지에서 실제로 확인되는 구성요소와 학생 설명으로 명확히 뒷받침되는 구성요소만 추출하세요.
-JSON만 반환하세요. 형식:
-{"summary":"한두 문장","uncertainties":["불확실한 점"],"components":[{"name":"구성요소","confidence":"확실|보통|불확실","reason":"짧은 근거"}]}
-최대 12개 구성요소.`;
-   const r=await ai.models.generateContent({
-     model:ANALYSIS_MODEL,
-     contents:[{inlineData:{mimeType:state.imageMime,data:state.imageBase64}},{text:prompt}],
-     config:{responseMimeType:"application/json"}
+   const data=await callApi("/api/analyze",{
+     title:state.title,
+     description:state.description,
+     imageBase64:state.imageBase64,
+     imageMime:state.imageMime
    });
-   const parsed=JSON.parse((r.text||"{}").replace(/```json|```/g,"").trim());
+   const parsed=data.analysis||{};
    state.analysis=parsed;
    state.components=(parsed.components||[]).map((c,i)=>({...c,ref:String((i+1)*10)}));
    setStep(2);
  }catch(e){alert("구조 분석 실패: "+(e.message||e));btn.disabled=false;btn.textContent="AI 구조 분석 →";}
 }
-
 function analysis(){
  layout(`<section class="card"><h2>STEP 2. AI가 스케치를 이렇게 이해했습니다.</h2>
  <div class="grid2"><div class="preview"><img src="${state.imageDataUrl}"></div><div>
@@ -166,37 +127,24 @@ function generateScreen(){
 }
 
 async function generateDrawing(){
- if(!state.apiKey){document.querySelector("#apiBtn").click();return;}
- const btn=document.querySelector("#generate");btn.disabled=true;btn.textContent="도면 생성 중…";
+ const btn=document.querySelector("#generate");
+ if(btn.disabled)return;
+ btn.disabled=true;btn.textContent="도면 생성 중…";
  try{
-  const ai=client();
-  const comps=state.components.map(c=>`${c.ref}: ${c.name}`).join(", ");
-  const prompt=`Transform the supplied student's invention sketch into a clean black-and-white patent-style technical line drawing.
-STRICT PRESERVATION RULES:
-- Preserve the student's invention structure and component relationships.
-- Do NOT add components, remove components, redesign, beautify, or invent hidden structures.
-- If a detail is ambiguous, simplify it rather than inventing it.
-- Remove paper texture, shadows, handwriting noise, colors and photographic background.
-- Use clean black technical outlines on a pure white background, minimal or no shading.
-- Do NOT render reference numerals, labels, arrows, titles, captions, dimensions, logos, or explanatory text.
-- Keep generous white space around the invention.
-Requested view: ${state.figureType}.
-Confirmed components: ${comps}.
-Student description: ${state.description}
-This is an educational draft; fidelity to the supplied sketch is more important than visual attractiveness.`;
-  const interaction=await ai.interactions.create({
-    model:IMAGE_MODEL,
-    input:[{type:"text",text:prompt},{type:"image",mime_type:state.imageMime,data:state.imageBase64}],
-    response_format:{type:"image",image_size:"1K"}
+  const data=await callApi("/api/generate-image",{
+    title:state.title,
+    description:state.description,
+    figureType:state.figureType,
+    components:state.components,
+    imageBase64:state.imageBase64,
+    imageMime:state.imageMime
   });
-  const out=interaction.output_image;
-  if(!out?.data) throw new Error("이미지 응답을 받지 못했습니다.");
-  state.generatedMime=out.mime_type||"image/png";
-  state.generated=`data:${state.generatedMime};base64,${out.data}`;
+  if(!data.imageBase64) throw new Error("이미지 응답을 받지 못했습니다.");
+  state.generatedMime=data.mimeType||"image/png";
+  state.generated=`data:${state.generatedMime};base64,${data.imageBase64}`;
   state.markers=[];render();
  }catch(e){alert("도면 생성 실패: "+(e.message||e));btn.disabled=false;btn.textContent="특허도면 생성";}
 }
-
 function initMarkers(){
  if(state.markers.length)return;
  const n=Math.max(state.components.length,1);
@@ -239,21 +187,15 @@ async function exportComposite(){
 }
 
 async function createDescription(){
- if(!state.apiKey){document.querySelector("#apiBtn").click();return;}
  try{
-  const ai=client();const list=state.components.map(c=>`${c.ref}: ${c.name}`).join(", ");
-  const r=await ai.models.generateContent({model:ANALYSIS_MODEL,contents:`고등학교 특허명세서 작성 활동용입니다.
-발명명: ${state.title}
-도면 유형: ${state.figureType}
-구성요소: ${list}
-다음 두 항목만 한국어로 간결하게 작성하세요.
-1) 도면의 간단한 설명: "도 1은 ..." 형식 한 문장
-2) 부호의 설명: 각 참조부호와 구성요소를 줄바꿈
-학생이 확인하지 않은 새로운 기술적 내용을 추가하지 마세요.`});
-  state.drawingDescription=r.text||"";setStep(6);
+  const data=await callApi("/api/describe",{
+    title:state.title,
+    figureType:state.figureType,
+    components:state.components
+  });
+  state.drawingDescription=data.text||"";setStep(6);
  }catch(e){alert("도면 설명 생성 실패: "+(e.message||e));}
 }
-
 function finish(){
  layout(`<section class="card"><h2>STEP 6. 완성</h2>
  <div class="grid2"><div class="preview"><img src="${state.generated}"></div><div>
@@ -266,7 +208,6 @@ function finish(){
 }
 
 function render(){
- if(!state.apiKey){const remembered=localStorage.getItem("gemini_api_key");if(remembered){state.apiKey=remembered;state.remember=true;sessionStorage.setItem("gemini_api_key",remembered);}}
  [home,upload,analysis,components,generateScreen,editor,finish][state.step]();
 }
 render();

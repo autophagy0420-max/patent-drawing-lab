@@ -1,5 +1,5 @@
 {
-  "name": "patent-drawing-lab",
+  "name": "patent-specification-lab",
   "private": true,
   "version": "0.3.0",
   "type": "module",
@@ -8,9 +8,7 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "@google/genai": "^2.0.1",
+  "devDependencies": {
     "vite": "^7.1.0"
-  },
-  "devDependencies": {}
+  }
 }

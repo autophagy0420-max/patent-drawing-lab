@@ -2,7 +2,7 @@ import './style.css';
 
 const AI_STUDIO_URL='https://aistudio.google.com/app/apikey';
 const MODEL='gemini-3.6-flash';
-const STEPS=['시작','아이디어','AI 확인','발명 구조','명세서 초안','최종 편집','도면 프롬프트','완성'];
+const STEPS=['시작','아이디어','AI 확인','발명 구조','명세서 초안','최종 편집','도면 프롬프트','완성·기록'];
 const app=document.querySelector('#app');
 
 const state={
@@ -18,9 +18,15 @@ const state={
   conversation:[],
   questions:[],
   answers:{},
+  answerSources:{},
+  interactionLog:[],
+  initialInput:null,
   brief:null,
   draft:null,
+  aiInitialDraft:null,
+  aiInitialDraftText:'',
   finalText:'',
+  revisionNotes:[{change:'',reason:''},{change:'',reason:''}],
   drawingPrompt:''
 };
 
@@ -89,7 +95,7 @@ function keyModal(){
 
 function home(){
   state.step=0;
-  layout(`<div class="card hero"><span class="badge">Patent Specification Lab v0.3</span><h2>말로 설명하고, 원하면 스케치도 보여주세요.<br>AI가 발명자의 의도를 확인하며 명세서로 구체화합니다.</h2><p class="muted">프리핸드 스케치는 선택사항입니다. 첨부하면 AI가 구조·배치관계를 이해하는 보조자료로 사용하고, 첨부하지 않으면 지금처럼 설명과 확인 질문만으로 진행합니다.</p><div class="flow"><div class="flow-item">① 설명 + 선택 스케치</div><div class="flow-item">② AI 확인 질문</div><div class="flow-item">③ 발명 구조 확정</div><div class="flow-item">④ 명세서 작성·수정</div><div class="flow-item">⑤ 도면 프롬프트</div></div><div class="notice good"><b>스케치 사용 원칙</b><br>스케치는 학생 의도를 이해하기 위한 보조 자료입니다. AI는 그림만 보고 구조를 확정하지 않으며, 설명과 스케치가 다르거나 모호하면 학생에게 다시 확인합니다.</div><div class="notice warn"><b>주의</b><br>교육용 작성 도구이며 실제 출원의 법률적 완성도나 등록 가능성을 보장하지 않습니다.</div><div class="actions"><span></span><button class="btn" id="start">발명 아이디어 작성 시작 →</button></div></div>`);
+  layout(`<div class="card hero"><span class="badge">Patent Specification Lab v0.4</span><h2>말로 설명하고, 원하면 스케치도 보여주세요.<br>AI가 발명자의 의도를 확인하며 명세서로 구체화합니다.</h2><p class="muted">프리핸드 스케치는 선택사항입니다. 첨부하면 AI가 구조·배치관계를 이해하는 보조자료로 사용하고, 첨부하지 않으면 지금처럼 설명과 확인 질문만으로 진행합니다.</p><div class="flow"><div class="flow-item">① 설명 + 선택 스케치</div><div class="flow-item">② AI 확인 질문</div><div class="flow-item">③ 발명 구조 확정</div><div class="flow-item">④ 명세서 작성·수정</div><div class="flow-item">⑤ 도면 프롬프트</div><div class="flow-item">⑥ 수행 기록</div></div><div class="notice good"><b>스케치 사용 원칙</b><br>스케치는 학생 의도를 이해하기 위한 보조 자료입니다. AI는 그림만 보고 구조를 확정하지 않으며, 설명과 스케치가 다르거나 모호하면 학생에게 다시 확인합니다.</div><div class="notice warn"><b>주의</b><br>교육용 작성 도구이며 실제 출원의 법률적 완성도나 등록 가능성을 보장하지 않습니다.</div><div class="actions"><span></span><button class="btn" id="start">발명 아이디어 작성 시작 →</button></div></div>`);
   document.querySelector('#start').onclick=()=>state.apiKey?setStep(1):keyModal();
 }
 
@@ -146,12 +152,21 @@ function idea(){
     try{
       const r=await gemini(initialPrompt(),true,state.apiKey,sketchMedia());
       state.sketchAnalysis={observations:r.sketchObservations||[],conflicts:r.sketchConflicts||[]};
+      if(!state.initialInput){
+        state.initialInput={
+          title:state.title,
+          rough:state.rough,
+          sketchAttached:!!state.sketchBase64,
+          sketchName:state.sketchName||''
+        };
+      }
       state.conversation=[
         {role:'user',text:`발명의 명칭: ${state.title}\n\n${state.rough}${state.sketchBase64?'\n\n[프리핸드 스케치 첨부됨]':''}`},
         {role:'ai',text:r.understanding||''}
       ];
       state.questions=r.questions||[];
       state.answers={};
+      state.answerSources={};
       setStep(2);
     }catch(err){alert(friendly(err));b.disabled=false;b.textContent='AI가 내 의도 확인하기 →'}
   };
@@ -192,9 +207,11 @@ JSON:
 }`;
 }
 
-function qhtml(q){return `<div class="qcard" data-id="${esc(q.id)}"><strong>${esc(q.question)}</strong><div class="small muted">${esc(q.why||'')}</div>${q.options?.length?`<div class="choice-row">${q.options.map(o=>`<button type="button" class="choice" data-value="${esc(o)}">${esc(o)}</button>`).join('')}</div>`:''}<input class="answer" placeholder="내 답변 직접 입력" value="${esc(state.answers[q.id]||'')}"></div>`}
-function bindQs(){document.querySelectorAll('.qcard').forEach(c=>{const id=c.dataset.id,input=c.querySelector('.answer');input.oninput=()=>state.answers[id]=input.value;c.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{c.querySelectorAll('.choice').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');input.value=b.dataset.value;state.answers[id]=b.dataset.value})})}
-function answers(){return state.questions.map(q=>({question:q.question,answer:(state.answers[q.id]||'').trim()||'아직 정하지 않음'}))}
+function qhtml(q){return `<div class="qcard" data-id="${esc(q.id)}"><strong>${esc(q.question)}</strong><div class="small muted">${esc(q.why||'')}</div>${q.options?.length?`<div class="choice-row">${q.options.map(o=>`<button type="button" class="choice ${state.answerSources[q.id]==='choice'&&state.answers[q.id]===o?'selected':''}" data-value="${esc(o)}">${esc(o)}</button>`).join('')}</div>`:''}<input class="answer" placeholder="내 답변 직접 입력" value="${esc(state.answers[q.id]||'')}"></div>`}
+function bindQs(){document.querySelectorAll('.qcard').forEach(c=>{const id=c.dataset.id,input=c.querySelector('.answer');input.oninput=()=>{state.answers[id]=input.value;state.answerSources[id]='typed';c.querySelectorAll('.choice').forEach(x=>x.classList.remove('selected'))};c.querySelectorAll('.choice').forEach(b=>b.onclick=()=>{c.querySelectorAll('.choice').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');input.value=b.dataset.value;state.answers[id]=b.dataset.value;state.answerSources[id]='choice'})})}
+function answers(){return state.questions.map(q=>({id:q.id,question:q.question,answer:(state.answers[q.id]||'').trim()||'아직 정하지 않음',source:(state.answers[q.id]||'').trim()?(state.answerSources[q.id]||'typed'):'unanswered'}))}
+function interactionRound(ans,extra,finalize){return {round:state.interactionLog.length+1,action:finalize?'발명 구조 확정':'AI 재확인',items:ans.map(a=>({...a})),extra:extra||''}}
+function allInteractionForPrompt(ans,extra){return [...state.interactionLog,interactionRound(ans,extra,true)]}
 
 function dialogue(){
   const obs=state.sketchAnalysis?.observations||[];
@@ -219,15 +236,17 @@ async function refine(finalize){
   try{
     if(finalize){
       state.brief=await gemini(briefPrompt(ans,extra),true,state.apiKey,sketchMedia());
+      state.interactionLog.push(interactionRound(ans,extra,true));
       setStep(3);
     }else{
       const r=await gemini(refinePrompt(ans,extra),true,state.apiKey,sketchMedia());
+      state.interactionLog.push(interactionRound(ans,extra,false));
       state.sketchAnalysis={observations:r.sketchObservations||state.sketchAnalysis?.observations||[],conflicts:r.sketchConflicts||[]};
       state.conversation.push(
         {role:'user',text:ans.map(a=>`${a.question}\n→ ${a.answer}`).join('\n\n')+(extra?`\n\n추가 설명: ${extra}`:'')},
         {role:'ai',text:r.understanding||''}
       );
-      state.questions=r.questions||[];state.answers={};render();
+      state.questions=r.questions||[];state.answers={};state.answerSources={};render();
     }
   }catch(e){alert(friendly(e));btn.disabled=false;btn.textContent=finalize?'발명 구조 정리 →':'AI에게 다시 확인받기'}
 }
@@ -236,6 +255,9 @@ function refinePrompt(ans,extra){
   return `고등학교 특허명세서 작성 코치로서 아래 학생 아이디어를 다시 확인하세요.
 원래 발명명: ${state.title}
 원래 설명: ${state.rough}
+지금까지의 확인 기록:
+${JSON.stringify(state.interactionLog,null,2)}
+
 학생의 이번 답:
 ${JSON.stringify(ans,null,2)}
 추가 설명: ${extra||'없음'}
@@ -254,8 +276,8 @@ function briefPrompt(ans,extra){
 
 발명명: ${state.title}
 설명: ${state.rough}
-확인 답:
-${JSON.stringify(ans,null,2)}
+전체 확인 기록(이번 답 포함):
+${JSON.stringify(allInteractionForPrompt(ans,extra),null,2)}
 추가 설명: ${extra||'없음'}
 ${state.sketchBase64?`프리핸드 스케치가 첨부되어 있습니다. 스케치에서 보이는 형상·배치는 학생 답변을 보조하는 정도로만 사용하고, 학생이 확인하지 않은 구조를 스케치만 보고 확정하지 마세요.`:''}
 
@@ -297,7 +319,7 @@ function brief(){
       operation:document.querySelector('#bOperation').value.split('\n').map(x=>x.trim()).filter(Boolean)
     };
     const btn=e.currentTarget;btn.disabled=true;btn.textContent='명세서 초안 작성 중…';
-    try{state.draft=await gemini(specPrompt());setStep(4)}
+    try{const generated=await gemini(specPrompt());state.draft=generated;if(!state.aiInitialDraft){state.aiInitialDraft=JSON.parse(JSON.stringify(generated));state.aiInitialDraftText=md(generated)}setStep(4)}
     catch(err){alert(friendly(err));btn.disabled=false;btn.textContent='이 내용으로 명세서 초안 작성 →'}
   };
 }
@@ -342,14 +364,23 @@ function download(name,text,type){const blob=new Blob([text],{type:`${type};char
 function safe(){return (state.brief?.recommendedTitle||state.title||'특허명세서').replace(/[\\/:*?"<>|]/g,'_').slice(0,60)}
 
 function finalEditor(){
-  layout(`<div class="card"><h2>STEP 5. 최종 편집</h2><p class="muted">이 화면부터는 학생의 최종본입니다. 문장·용어·구성요소·청구항을 직접 수정하세요.</p><div class="notice"><b>최종 점검</b><br>청구범위와 상세설명의 용어가 같은가? · 구성요소가 빠지거나 새로 생기지 않았는가? · 효과가 과장되지 않았는가? · 미확정 사항이 사실처럼 쓰이지 않았는가?</div><div class="editor-toolbar"><button class="btn ghost" id="copy">전체 복사</button><button class="btn ghost" id="md">.md 다운로드</button><button class="btn ghost" id="txt">.txt 다운로드</button></div><textarea id="finalText" class="final-editor">${esc(state.finalText)}</textarea><div class="actions"><button class="btn secondary" id="back">← 항목별 초안</button><button class="btn" id="drawing">도면 생성용 프롬프트 만들기 →</button></div></div>`);
-  const get=()=>state.finalText=document.querySelector('#finalText').value;
-  document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(get());alert('전체 내용을 복사했습니다.')};
-  document.querySelector('#md').onclick=()=>download(safe()+'.md',get(),'text/markdown');
-  document.querySelector('#txt').onclick=()=>download(safe()+'.txt',get(),'text/plain');
-  document.querySelector('#back').onclick=()=>{get();setStep(4)};
+  const notes=state.revisionNotes?.length?state.revisionNotes:[{change:'',reason:''},{change:'',reason:''}];
+  layout(`<div class="card"><h2>STEP 5. 최종 편집</h2><p class="muted">이 화면부터는 학생의 최종본입니다. 문장·용어·구성요소·청구항을 직접 수정하세요.</p><div class="notice"><b>최종 점검</b><br>청구범위와 상세설명의 용어가 같은가? · 구성요소가 빠지거나 새로 생기지 않았는가? · 효과가 과장되지 않았는가? · 미확정 사항이 사실처럼 쓰이지 않았는가?</div><div class="editor-toolbar"><button class="btn ghost" id="copy">전체 복사</button><button class="btn ghost" id="md">.md 다운로드</button><button class="btn ghost" id="txt">.txt 다운로드</button></div><textarea id="finalText" class="final-editor">${esc(state.finalText)}</textarea>
+  <div class="revision-box"><h3>내가 수정한 내용과 이유 <span class="badge">수행 기록</span></h3><p class="small muted">AI 초안과 비교해 중요하게 고친 부분을 기록하세요. 모든 수정사항을 적을 필요는 없습니다.</p>
+  ${notes.map((n,i)=>`<div class="revision-item"><b>수정 ${i+1}</b><label class="field">무엇을 수정했나요?<input data-rev-change="${i}" value="${esc(n.change||'')}" placeholder="예: 회전식 분리판 → 슬라이드식 분리판"></label><label class="field">왜 수정했나요?<textarea data-rev-reason="${i}" placeholder="예: 내가 설계한 실제 결합 방식과 달랐기 때문">${esc(n.reason||'')}</textarea></label></div>`).join('')}
+  </div>
+  <div class="actions"><button class="btn secondary" id="back">← 항목별 초안</button><button class="btn" id="drawing">도면 생성용 프롬프트 만들기 →</button></div></div>`);
+  const save=()=>{
+    state.finalText=document.querySelector('#finalText').value;
+    state.revisionNotes=notes.map((_,i)=>({change:document.querySelector(`[data-rev-change="${i}"]`)?.value.trim()||'',reason:document.querySelector(`[data-rev-reason="${i}"]`)?.value.trim()||''}));
+    return state.finalText;
+  };
+  document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(save());alert('전체 내용을 복사했습니다.')};
+  document.querySelector('#md').onclick=()=>download(safe()+'.md',save(),'text/markdown');
+  document.querySelector('#txt').onclick=()=>download(safe()+'.txt',save(),'text/plain');
+  document.querySelector('#back').onclick=()=>{save();setStep(4)};
   document.querySelector('#drawing').onclick=async e=>{
-    get();const b=e.currentTarget;b.disabled=true;b.textContent='도면 프롬프트 작성 중…';
+    save();const b=e.currentTarget;b.disabled=true;b.textContent='도면 프롬프트 작성 중…';
     try{state.drawingPrompt=await gemini(drawPrompt(),true,state.apiKey,sketchMedia());setStep(6)}
     catch(err){alert(friendly(err));b.disabled=false;b.textContent='도면 생성용 프롬프트 만들기 →'}
   }
@@ -410,12 +441,31 @@ function drawing(){
   document.querySelector('#done').onclick=()=>setStep(7);
 }
 
+function sourceLabel(s){return s==='choice'?'AI 제안 선택':s==='typed'?'학생 직접 입력':'미응답/미확정'}
+function performanceRecord(){
+  const initial=state.initialInput||{title:state.title,rough:state.rough,sketchAttached:!!state.sketchDataUrl,sketchName:state.sketchName||''};
+  const b=state.brief||{};
+  const interactions=state.interactionLog.length?state.interactionLog.map(r=>{
+    const qa=(r.items||[]).map((x,i)=>`${i+1}. Q. ${x.question}\n   A. ${x.answer}\n   응답 방식: ${sourceLabel(x.source)}`).join('\n');
+    return `### ${r.round}차 확인 (${r.action})\n${qa||'확인 질문 없음'}${r.extra?`\n추가 설명: ${r.extra}`:''}`;
+  }).join('\n\n'):'확인 질문 기록 없음';
+  const comps=(b.components||[]).map(x=>`- ${x.name}: ${x.role||'역할 미기재'}${x.relationship?` / 관계: ${x.relationship}`:''}`).join('\n')||'- 구성요소 기록 없음';
+  const ops=(b.operation||[]).map((x,i)=>`${i+1}. ${x}`).join('\n')||'작동 과정 기록 없음';
+  const effects=(b.effects||[]).map(x=>`- ${x}`).join('\n')||'- 효과 기록 없음';
+  const revs=(state.revisionNotes||[]).filter(x=>x.change||x.reason).map((x,i)=>`### 수정 ${i+1}\n- 수정 내용: ${x.change||'미기재'}\n- 수정 이유: ${x.reason||'미기재'}`).join('\n\n')||'중요 수정 기록 미작성';
+  return `# 수행평가 학습 기록\n\n> 이 기록은 AI 활용 과정과 학생의 최종 결과물을 함께 확인하기 위한 교육용 기록입니다. 학교에서 지정한 LMS, 포트폴리오 또는 문서에 붙여넣어 제출할 수 있습니다.\n\n## 1. 최초 발명 아이디어\n- 발명의 명칭: ${initial.title||''}\n- 스케치 첨부: ${initial.sketchAttached?`있음${initial.sketchName?` (${initial.sketchName})`:''}`:'없음'}\n\n${initial.rough||''}\n\n## 2. AI 확인 질문과 학생 응답\n${interactions}\n\n## 3. 학생이 확정한 발명 구조\n- 최종 발명의 명칭: ${b.recommendedTitle||state.title||''}\n- 발명의 핵심: ${b.coreIdea||''}\n- 해결하려는 문제: ${b.problem||''}\n\n### 구성요소의 기능\n${comps}\n\n### 작동/사용 과정\n${ops}\n\n### 기대 효과\n${effects}\n\n## 4. AI가 생성한 최초 명세서 초안\n${state.aiInitialDraftText||'(최초 AI 초안 기록 없음)'}\n\n## 5. 학생의 수정 기록\n${revs}\n\n## 6. 학생 최종 명세서\n${state.finalText||''}\n`;
+}
+
 function done(){
-  layout(`<div class="card hero"><span class="badge">작성 완료</span><h2>특허명세서 학습 과정을 마쳤습니다.</h2><p>최종 제출 전에는 학생 본인이 구조·용어·청구항과 실제 발명 아이디어의 일치 여부를 확인하세요.</p><div class="notice good"><b>완성된 결과물</b><br>✓ 학생이 수정한 명세서 최종본<br>✓ MD/TXT 저장 가능<br>✓ 도면별 생성 프롬프트 + 미확정 구조 점검${state.sketchDataUrl?'<br>✓ 초기 프리핸드 스케치 기반 구조 확인':''}</div><div class="actions"><button class="btn secondary" id="edit">← 최종본 다시 보기</button><button class="btn" id="restart">새 발명 시작</button></div></div>`);
+  const record=performanceRecord();
+  layout(`<div class="card hero"><span class="badge">작성 완료 · v0.4</span><h2>특허명세서 학습 과정과 수행 기록이 완성되었습니다.</h2><p>아래 기록에는 최초 아이디어, AI 확인 과정, 확정한 발명 구조, AI 최초 초안, 학생의 수정 기록과 최종 명세서가 함께 포함됩니다.</p><div class="notice good"><b>교사 확인이 가능한 평가 증거</b><br>✓ 최초 문제·아이디어<br>✓ AI 질문에 대한 학생의 응답 과정<br>✓ 학생이 확정한 구성요소와 기능<br>✓ AI 최초 초안과 학생 최종본<br>✓ 학생이 직접 작성한 수정 내용과 이유</div><div class="notice"><b>제출 방법</b><br>학교에서 사용하는 LMS, 디지털 포트폴리오, 문서 등에 아래 기록을 그대로 붙여넣거나 파일로 제출하세요.</div><div class="editor-toolbar"><button class="btn" id="copyRecord">수행평가 기록 전체 복사</button><button class="btn ghost" id="recordMd">기록 .md 다운로드</button><button class="btn ghost" id="recordTxt">기록 .txt 다운로드</button></div><textarea class="record-preview" id="recordPreview" readonly>${esc(record)}</textarea><div class="actions"><button class="btn secondary" id="edit">← 최종본 다시 보기</button><button class="btn" id="restart">새 발명 시작</button></div></div>`);
+  document.querySelector('#copyRecord').onclick=async()=>{await navigator.clipboard.writeText(record);alert('수행평가 기록 전체를 복사했습니다.')};
+  document.querySelector('#recordMd').onclick=()=>download(safe()+'_수행평가기록.md',record,'text/markdown');
+  document.querySelector('#recordTxt').onclick=()=>download(safe()+'_수행평가기록.txt',record,'text/plain');
   document.querySelector('#edit').onclick=()=>setStep(5);
   document.querySelector('#restart').onclick=()=>{
     const k=state.apiKey;
-    Object.assign(state,{step:0,apiKey:k,title:'',rough:'',sketchDataUrl:'',sketchBase64:'',sketchMime:'',sketchName:'',sketchAnalysis:null,conversation:[],questions:[],answers:{},brief:null,draft:null,finalText:'',drawingPrompt:''});
+    Object.assign(state,{step:0,apiKey:k,title:'',rough:'',sketchDataUrl:'',sketchBase64:'',sketchMime:'',sketchName:'',sketchAnalysis:null,conversation:[],questions:[],answers:{},answerSources:{},interactionLog:[],initialInput:null,brief:null,draft:null,aiInitialDraft:null,aiInitialDraftText:'',finalText:'',revisionNotes:[{change:'',reason:''},{change:'',reason:''}],drawingPrompt:''});
     render();
   };
 }

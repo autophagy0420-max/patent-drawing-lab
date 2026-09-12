@@ -27,6 +27,7 @@ const state={
   aiInitialDraftText:'',
   finalText:'',
   revisionNotes:[{change:'',reason:''},{change:'',reason:''}],
+  revisionReasons:{},
   drawingPrompt:''
 };
 
@@ -95,7 +96,7 @@ function keyModal(){
 
 function home(){
   state.step=0;
-  layout(`<div class="card hero"><span class="badge">Patent Specification Lab v0.4</span><h2>말로 설명하고, 원하면 스케치도 보여주세요.<br>AI가 발명자의 의도를 확인하며 명세서로 구체화합니다.</h2><p class="muted">프리핸드 스케치는 선택사항입니다. 첨부하면 AI가 구조·배치관계를 이해하는 보조자료로 사용하고, 첨부하지 않으면 지금처럼 설명과 확인 질문만으로 진행합니다.</p><div class="flow"><div class="flow-item">① 설명 + 선택 스케치</div><div class="flow-item">② AI 확인 질문</div><div class="flow-item">③ 발명 구조 확정</div><div class="flow-item">④ 명세서 작성·수정</div><div class="flow-item">⑤ 도면 프롬프트</div><div class="flow-item">⑥ 수행 기록</div></div><div class="notice good"><b>스케치 사용 원칙</b><br>스케치는 학생 의도를 이해하기 위한 보조 자료입니다. AI는 그림만 보고 구조를 확정하지 않으며, 설명과 스케치가 다르거나 모호하면 학생에게 다시 확인합니다.</div><div class="notice warn"><b>주의</b><br>교육용 작성 도구이며 실제 출원의 법률적 완성도나 등록 가능성을 보장하지 않습니다.</div><div class="actions"><span></span><button class="btn" id="start">발명 아이디어 작성 시작 →</button></div></div>`);
+  layout(`<div class="card hero"><span class="badge">Patent Specification Lab v0.4.1</span><h2>말로 설명하고, 원하면 스케치도 보여주세요.<br>AI가 발명자의 의도를 확인하며 명세서로 구체화합니다.</h2><p class="muted">발명 구상 스케치는 선택사항입니다. 완성된 도면이 아니라도 머릿속 구조를 시각적으로 풀어낸 자료가 될 수 있습니다. 첨부하면 AI가 구조·배치관계를 이해하는 보조자료로 사용하고, 첨부하지 않아도 설명과 확인 질문만으로 진행할 수 있습니다.</p><div class="flow"><div class="flow-item">① 설명 + 선택 스케치</div><div class="flow-item">② AI 확인 질문</div><div class="flow-item">③ 발명 구조 확정</div><div class="flow-item">④ 명세서 작성·수정</div><div class="flow-item">⑤ 도면 프롬프트</div><div class="flow-item">⑥ 수행 기록</div></div><div class="notice good"><b>발명 구상 스케치 사용 원칙</b><br>스케치는 선택 자료이며 그림 실력이나 미적 완성도를 평가하지 않습니다. 다만 학생이 주요 구성요소의 위치·관계를 사전에 구상한 과정 증거로 활용할 수 있습니다. AI는 그림만 보고 구조를 확정하지 않으며, 설명과 스케치가 다르거나 모호하면 학생에게 다시 확인합니다.</div><div class="notice warn"><b>주의</b><br>교육용 작성 도구이며 실제 출원의 법률적 완성도나 등록 가능성을 보장하지 않습니다.</div><div class="actions"><span></span><button class="btn" id="start">발명 아이디어 작성 시작 →</button></div></div>`);
   document.querySelector('#start').onclick=()=>state.apiKey?setStep(1):keyModal();
 }
 
@@ -129,10 +130,10 @@ function idea(){
   <label class="field">내가 생각한 발명의 명칭<input id="title" value="${esc(state.title)}" placeholder="예: 립밤을 보관할 수 있는 휴대폰 케이스"></label>
   <label class="field">발명 아이디어 설명<textarea id="rough" placeholder="예: 휴대폰 뒤에 립밤을 붙여서 같이 가지고 다니고, 립밤 뚜껑에는 휴대폰을 세울 수 있는 링이 있었으면 좋겠어요.">${esc(state.rough)}</textarea></label>
   <div class="sketch-upload">
-    <div class="sketch-upload-head"><div><b>프리핸드 스케치 첨부 <span class="badge">선택</span></b><p class="small muted">정확한 도면이 아니어도 됩니다. 대략적인 구조, 부품 위치, 결합·개폐 방향이 보이면 충분합니다.</p></div></div>
-    ${state.sketchDataUrl?`<div class="sketch-preview-wrap"><img class="sketch-preview" src="${state.sketchDataUrl}" alt="첨부한 발명 스케치"><div><b>${esc(state.sketchName||'스케치')}</b><p class="small muted">AI는 이 그림을 보조 자료로만 사용합니다.</p><button class="btn ghost" id="removeSketch" type="button">스케치 제거</button></div></div>`:`<label class="sketch-drop" for="sketchInput"><span class="sketch-icon">✏️</span><b>스케치 사진 또는 이미지 선택</b><span class="small muted">JPG · PNG · WEBP / 스마트폰 촬영본 가능</span></label><input id="sketchInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>`}
+    <div class="sketch-upload-head"><div><b>발명 구상 스케치 첨부 <span class="badge">선택</span></b><p class="small muted">정확한 도면이나 예쁜 그림이 아니어도 됩니다. 주요 구성요소의 위치·관계, 결합·개폐 방향 등 머릿속 구상을 간단히 표현해 보세요.</p></div></div>
+    ${state.sketchDataUrl?`<div class="sketch-preview-wrap"><img class="sketch-preview" src="${state.sketchDataUrl}" alt="첨부한 발명 스케치"><div><b>${esc(state.sketchName||'스케치')}</b><p class="small muted">AI는 이 그림을 보조 자료로 사용하며, 수행 기록에는 스케치 제출 여부가 남습니다.</p><button class="btn ghost" id="removeSketch" type="button">스케치 제거</button></div></div>`:`<label class="sketch-drop" for="sketchInput"><span class="sketch-icon">✏️</span><b>스케치 사진 또는 이미지 선택</b><span class="small muted">JPG · PNG · WEBP / 스마트폰 촬영본 가능</span></label><input id="sketchInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>`}
   </div>
-  <div class="notice"><b>힌트</b><br>① 기존에는 무엇이 불편했나요? ② 어떤 구성이나 기능을 추가하나요? ③ 사용하면 무엇이 좋아지나요?</div>
+  <div class="notice"><b>힌트</b><br>① 기존에는 무엇이 불편했나요? ② 어떤 구성이나 기능을 추가하나요? ③ 사용하면 무엇이 좋아지나요?<br><span class="small muted">스케치는 선택사항이며, 제출하지 않았다는 이유만으로 자동 감점되지 않습니다.</span></div>
   <div class="actions"><button class="btn secondary" id="back">← 이전</button><button class="btn" id="go">AI가 내 의도 확인하기 →</button></div></div>`);
 
   document.querySelector('#back').onclick=()=>setStep(0);
@@ -363,21 +364,47 @@ function md(d){return `# ${d.title||state.title}\n\n## 【기술분야】\n${d.t
 function download(name,text,type){const blob=new Blob([text],{type:`${type};charset=utf-8`}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url)}
 function safe(){return (state.brief?.recommendedTitle||state.title||'특허명세서').replace(/[\\/:*?"<>|]/g,'_').slice(0,60)}
 
+function normalizeText(v=''){return String(v).replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim()}
+function parseMdSections(text=''){
+  const lines=String(text).replace(/\r/g,'').split('\n');
+  const out=[];let current={heading:'문서 시작',content:[]};
+  const push=()=>{const content=current.content.join('\n').trim();if(current.heading!=='문서 시작'||content)out.push({heading:current.heading,content})};
+  for(const line of lines){
+    const m=line.match(/^(#{1,3})\s+(.+)\s*$/);
+    if(m){push();current={heading:m[2].trim(),content:[]};}
+    else current.content.push(line);
+  }
+  push();return out;
+}
+function detectedChanges(){
+  const before=parseMdSections(state.aiInitialDraftText||'');
+  const after=parseMdSections(state.finalText||'');
+  const bm=new Map(before.map(x=>[x.heading,x.content]));
+  const am=new Map(after.map(x=>[x.heading,x.content]));
+  const order=[];[...before,...after].forEach(x=>{if(!order.includes(x.heading))order.push(x.heading)});
+  return order.map(heading=>({heading,before:bm.get(heading)||'',after:am.get(heading)||''}))
+    .filter(x=>normalizeText(x.before)!==normalizeText(x.after));
+}
+function shortText(v='',max=420){const t=normalizeText(v);return t.length>max?t.slice(0,max)+'…':t}
+function downloadDataUrl(name,dataUrl){const a=document.createElement('a');a.href=dataUrl;a.download=name;document.body.appendChild(a);a.click();a.remove()}
+
 function finalEditor(){
-  const notes=state.revisionNotes?.length?state.revisionNotes:[{change:'',reason:''},{change:'',reason:''}];
-  layout(`<div class="card"><h2>STEP 5. 최종 편집</h2><p class="muted">이 화면부터는 학생의 최종본입니다. 문장·용어·구성요소·청구항을 직접 수정하세요.</p><div class="notice"><b>최종 점검</b><br>청구범위와 상세설명의 용어가 같은가? · 구성요소가 빠지거나 새로 생기지 않았는가? · 효과가 과장되지 않았는가? · 미확정 사항이 사실처럼 쓰이지 않았는가?</div><div class="editor-toolbar"><button class="btn ghost" id="copy">전체 복사</button><button class="btn ghost" id="md">.md 다운로드</button><button class="btn ghost" id="txt">.txt 다운로드</button></div><textarea id="finalText" class="final-editor">${esc(state.finalText)}</textarea>
-  <div class="revision-box"><h3>내가 수정한 내용과 이유 <span class="badge">수행 기록</span></h3><p class="small muted">AI 초안과 비교해 중요하게 고친 부분을 기록하세요. 모든 수정사항을 적을 필요는 없습니다.</p>
-  ${notes.map((n,i)=>`<div class="revision-item"><b>수정 ${i+1}</b><label class="field">무엇을 수정했나요?<input data-rev-change="${i}" value="${esc(n.change||'')}" placeholder="예: 회전식 분리판 → 슬라이드식 분리판"></label><label class="field">왜 수정했나요?<textarea data-rev-reason="${i}" placeholder="예: 내가 설계한 실제 결합 방식과 달랐기 때문">${esc(n.reason||'')}</textarea></label></div>`).join('')}
+  const changes=detectedChanges();
+  const reasonMap=state.revisionReasons||{};
+  layout(`<div class="card"><h2>STEP 5. 최종 편집</h2><p class="muted">이 화면부터는 학생의 최종본입니다. 문장·용어·구성요소·청구항을 직접 수정하세요.</p><div class="notice"><b>최종 점검</b><br>청구범위와 상세설명의 용어가 같은가? · 구성요소가 빠지거나 새로 생기지 않았는가? · 효과가 과장되지 않았는가? · 미확정 사항이 사실처럼 쓰이지 않았는가?</div><div class="editor-toolbar"><button class="btn ghost" id="copy">전체 복사</button><button class="btn ghost" id="md">.md 다운로드</button><button class="btn ghost" id="txt">.txt 다운로드</button><button class="btn secondary" id="checkChanges">변경사항 자동 확인</button></div><textarea id="finalText" class="final-editor">${esc(state.finalText)}</textarea>
+  <div class="revision-box"><h3>AI 초안과 실제 변경사항 <span class="badge">자동 확인</span></h3><p class="small muted">앱이 AI 최초 초안과 현재 최종본을 항목별로 비교합니다. 학생이 수정했다고 따로 적는 방식이 아니라 실제 문서 변화가 기록됩니다. 변경된 항목 중 의미 있는 수정에는 이유를 작성하세요.</p>
+  ${changes.length?changes.map((c,i)=>`<div class="revision-item detected-change"><div class="change-head"><b>변경 ${i+1}. ${esc(c.heading)}</b><span class="badge">실제 변경 감지</span></div><div class="change-grid"><div><span class="change-label">AI 최초 초안</span><div class="change-text">${esc(shortText(c.before)||'(내용 없음)')}</div></div><div><span class="change-label">학생 최종본</span><div class="change-text">${esc(shortText(c.after)||'(내용 없음)')}</div></div></div><label class="field">왜 수정했나요? <span class="small muted">(의미 있는 수정인 경우 작성)</span><textarea data-reason-key="${esc(c.heading)}" placeholder="예: 내가 실제로 설계한 결합 방식과 AI가 작성한 방식이 달랐기 때문">${esc(reasonMap[c.heading]||'')}</textarea></label></div>`).join(''):`<div class="notice warn"><b>실질적 수정이 감지되지 않았습니다.</b><br>AI 최초 초안과 현재 최종본이 같습니다. 자신의 발명 구조와 맞지 않는 부분, 불필요한 표현, 용어의 불일치가 없는지 다시 검토해 보세요.</div>`}
   </div>
   <div class="actions"><button class="btn secondary" id="back">← 항목별 초안</button><button class="btn" id="drawing">도면 생성용 프롬프트 만들기 →</button></div></div>`);
   const save=()=>{
     state.finalText=document.querySelector('#finalText').value;
-    state.revisionNotes=notes.map((_,i)=>({change:document.querySelector(`[data-rev-change="${i}"]`)?.value.trim()||'',reason:document.querySelector(`[data-rev-reason="${i}"]`)?.value.trim()||''}));
+    document.querySelectorAll('[data-reason-key]').forEach(t=>{state.revisionReasons[t.dataset.reasonKey]=t.value.trim()});
     return state.finalText;
   };
   document.querySelector('#copy').onclick=async()=>{await navigator.clipboard.writeText(save());alert('전체 내용을 복사했습니다.')};
   document.querySelector('#md').onclick=()=>download(safe()+'.md',save(),'text/markdown');
   document.querySelector('#txt').onclick=()=>download(safe()+'.txt',save(),'text/plain');
+  document.querySelector('#checkChanges').onclick=()=>{save();render()};
   document.querySelector('#back').onclick=()=>{save();setStep(4)};
   document.querySelector('#drawing').onclick=async e=>{
     save();const b=e.currentTarget;b.disabled=true;b.textContent='도면 프롬프트 작성 중…';
@@ -452,20 +479,23 @@ function performanceRecord(){
   const comps=(b.components||[]).map(x=>`- ${x.name}: ${x.role||'역할 미기재'}${x.relationship?` / 관계: ${x.relationship}`:''}`).join('\n')||'- 구성요소 기록 없음';
   const ops=(b.operation||[]).map((x,i)=>`${i+1}. ${x}`).join('\n')||'작동 과정 기록 없음';
   const effects=(b.effects||[]).map(x=>`- ${x}`).join('\n')||'- 효과 기록 없음';
-  const revs=(state.revisionNotes||[]).filter(x=>x.change||x.reason).map((x,i)=>`### 수정 ${i+1}\n- 수정 내용: ${x.change||'미기재'}\n- 수정 이유: ${x.reason||'미기재'}`).join('\n\n')||'중요 수정 기록 미작성';
-  return `# 수행평가 학습 기록\n\n> 이 기록은 AI 활용 과정과 학생의 최종 결과물을 함께 확인하기 위한 교육용 기록입니다. 학교에서 지정한 LMS, 포트폴리오 또는 문서에 붙여넣어 제출할 수 있습니다.\n\n## 1. 최초 발명 아이디어\n- 발명의 명칭: ${initial.title||''}\n- 스케치 첨부: ${initial.sketchAttached?`있음${initial.sketchName?` (${initial.sketchName})`:''}`:'없음'}\n\n${initial.rough||''}\n\n## 2. AI 확인 질문과 학생 응답\n${interactions}\n\n## 3. 학생이 확정한 발명 구조\n- 최종 발명의 명칭: ${b.recommendedTitle||state.title||''}\n- 발명의 핵심: ${b.coreIdea||''}\n- 해결하려는 문제: ${b.problem||''}\n\n### 구성요소의 기능\n${comps}\n\n### 작동/사용 과정\n${ops}\n\n### 기대 효과\n${effects}\n\n## 4. AI가 생성한 최초 명세서 초안\n${state.aiInitialDraftText||'(최초 AI 초안 기록 없음)'}\n\n## 5. 학생의 수정 기록\n${revs}\n\n## 6. 학생 최종 명세서\n${state.finalText||''}\n`;
+  const changes=detectedChanges();
+  const changeText=changes.length?changes.map((x,i)=>`### 변경 ${i+1}. ${x.heading}\n- 변경 전: ${shortText(x.before,500)||'(내용 없음)'}\n- 변경 후: ${shortText(x.after,500)||'(내용 없음)'}\n- 수정 이유: ${(state.revisionReasons||{})[x.heading]||'미기재'}`).join('\n\n'):'실질적 수정 없음 (AI 최초 초안과 학생 최종본이 동일함)';
+  return `# 수행평가 학습 기록\n\n> 이 기록은 AI 활용 과정과 학생의 최종 결과물을 함께 확인하기 위한 교육용 기록입니다. 학교에서 지정한 LMS, 포트폴리오 또는 문서에 붙여넣어 제출할 수 있습니다.\n\n## 1. 최초 발명 아이디어\n- 발명의 명칭: ${initial.title||''}\n- 발명 구상 스케치: ${initial.sketchAttached?`제출${initial.sketchName?` (${initial.sketchName})`:''}`:'미제출 (선택사항)'}\n\n${initial.rough||''}\n\n## 2. AI 확인 질문과 학생 응답\n${interactions}\n\n## 3. 학생이 확정한 발명 구조\n- 최종 발명의 명칭: ${b.recommendedTitle||state.title||''}\n- 발명의 핵심: ${b.coreIdea||''}\n- 해결하려는 문제: ${b.problem||''}\n\n### 구성요소의 기능\n${comps}\n\n### 작동/사용 과정\n${ops}\n\n### 기대 효과\n${effects}\n\n## 4. AI가 생성한 최초 명세서 초안\n${state.aiInitialDraftText||'(최초 AI 초안 기록 없음)'}\n\n## 5. AI 초안과 학생 최종본의 실제 변경 기록\n${changeText}\n\n## 6. 학생 최종 명세서\n${state.finalText||''}\n`;
 }
 
 function done(){
   const record=performanceRecord();
-  layout(`<div class="card hero"><span class="badge">작성 완료 · v0.4</span><h2>특허명세서 학습 과정과 수행 기록이 완성되었습니다.</h2><p>아래 기록에는 최초 아이디어, AI 확인 과정, 확정한 발명 구조, AI 최초 초안, 학생의 수정 기록과 최종 명세서가 함께 포함됩니다.</p><div class="notice good"><b>교사 확인이 가능한 평가 증거</b><br>✓ 최초 문제·아이디어<br>✓ AI 질문에 대한 학생의 응답 과정<br>✓ 학생이 확정한 구성요소와 기능<br>✓ AI 최초 초안과 학생 최종본<br>✓ 학생이 직접 작성한 수정 내용과 이유</div><div class="notice"><b>제출 방법</b><br>학교에서 사용하는 LMS, 디지털 포트폴리오, 문서 등에 아래 기록을 그대로 붙여넣거나 파일로 제출하세요.</div><div class="editor-toolbar"><button class="btn" id="copyRecord">수행평가 기록 전체 복사</button><button class="btn ghost" id="recordMd">기록 .md 다운로드</button><button class="btn ghost" id="recordTxt">기록 .txt 다운로드</button></div><textarea class="record-preview" id="recordPreview" readonly>${esc(record)}</textarea><div class="actions"><button class="btn secondary" id="edit">← 최종본 다시 보기</button><button class="btn" id="restart">새 발명 시작</button></div></div>`);
+  const changes=detectedChanges();
+  layout(`<div class="card hero"><span class="badge">작성 완료 · v0.4.1</span><h2>특허명세서 학습 과정과 수행 기록이 완성되었습니다.</h2><p>아래 기록에는 최초 아이디어, AI 확인 과정, 확정한 발명 구조, AI 최초 초안, 실제 변경 기록과 학생 최종 명세서가 함께 포함됩니다.</p><div class="notice good"><b>교사 확인이 가능한 평가 증거</b><br>✓ 최초 문제·아이디어<br>✓ AI 질문에 대한 학생의 응답 과정<br>✓ 학생이 확정한 구성요소와 기능<br>✓ 선택적으로 제출한 발명 구상 스케치<br>✓ AI 최초 초안과 학생 최종본의 실제 변경 내역</div><div class="notice ${changes.length?'good':'warn'}"><b>문서 변경 확인</b><br>${changes.length?`AI 최초 초안과 비교하여 <b>${changes.length}개 항목</b>에서 실제 변경이 감지되었습니다. 수정 이유가 작성된 항목은 수행 과정 증거로 함께 기록됩니다.`:'AI 최초 초안과 학생 최종본 사이에 실질적 변경이 감지되지 않았습니다.'}</div>${state.sketchDataUrl?`<div class="sketch-context large"><img src="${state.sketchDataUrl}" alt="발명 구상 스케치"><div><b>발명 구상 스케치가 제출되었습니다.</b><p class="small muted">텍스트 기록을 복사하면 이미지 파일 자체는 포함되지 않습니다. 학교 제출 방식에 따라 스케치도 함께 첨부할 수 있습니다.</p><button class="btn ghost" id="downloadSketch">발명 구상 스케치 저장</button></div></div>`:''}<div class="notice"><b>제출 방법</b><br>학교에서 사용하는 LMS, 디지털 포트폴리오, 문서 등에 아래 기록을 그대로 붙여넣거나 파일로 제출하세요.</div><div class="editor-toolbar"><button class="btn" id="copyRecord">수행평가 기록 전체 복사</button><button class="btn ghost" id="recordMd">기록 .md 다운로드</button><button class="btn ghost" id="recordTxt">기록 .txt 다운로드</button></div><textarea class="record-preview" id="recordPreview" readonly>${esc(record)}</textarea><div class="actions"><button class="btn secondary" id="edit">← 최종본 다시 보기</button><button class="btn" id="restart">새 발명 시작</button></div></div>`);
   document.querySelector('#copyRecord').onclick=async()=>{await navigator.clipboard.writeText(record);alert('수행평가 기록 전체를 복사했습니다.')};
   document.querySelector('#recordMd').onclick=()=>download(safe()+'_수행평가기록.md',record,'text/markdown');
   document.querySelector('#recordTxt').onclick=()=>download(safe()+'_수행평가기록.txt',record,'text/plain');
+  document.querySelector('#downloadSketch')?.addEventListener('click',()=>downloadDataUrl(safe()+'_발명구상스케치.jpg',state.sketchDataUrl));
   document.querySelector('#edit').onclick=()=>setStep(5);
   document.querySelector('#restart').onclick=()=>{
     const k=state.apiKey;
-    Object.assign(state,{step:0,apiKey:k,title:'',rough:'',sketchDataUrl:'',sketchBase64:'',sketchMime:'',sketchName:'',sketchAnalysis:null,conversation:[],questions:[],answers:{},answerSources:{},interactionLog:[],initialInput:null,brief:null,draft:null,aiInitialDraft:null,aiInitialDraftText:'',finalText:'',revisionNotes:[{change:'',reason:''},{change:'',reason:''}],drawingPrompt:''});
+    Object.assign(state,{step:0,apiKey:k,title:'',rough:'',sketchDataUrl:'',sketchBase64:'',sketchMime:'',sketchName:'',sketchAnalysis:null,conversation:[],questions:[],answers:{},answerSources:{},interactionLog:[],initialInput:null,brief:null,draft:null,aiInitialDraft:null,aiInitialDraftText:'',finalText:'',revisionNotes:[{change:'',reason:''},{change:'',reason:''}],revisionReasons:{},drawingPrompt:''});
     render();
   };
 }
